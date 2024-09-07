@@ -20,8 +20,35 @@ lazy val root = crossProject(JVMPlatform, JSPlatform).in(file("."))
   .settings(
     scalaVersion := "3.4.2",
 
+    name := "Argon Async Util",
     organization := "dev.argon",
     version := "0.1.0-SNAPSHOT",
+
+    description := "Utilities for converting between different async models",
+    homepage := Some(url("https://github.com/argon-lang/async-util")),
+
+    licenses := Seq(
+      "Apache License, Version 2.0" -> url("https://www.apache.org/licenses/LICENSE-2.0")
+    ),
+
+    scmInfo := Some(ScmInfo(
+      connection = "scm:git:git@github.com:argon-lang/async-util.git",
+      devConnection = "scm:git:git@github.com:argon-lang/async-util.git",
+      browseUrl = url("https://github.com/argon-lang/async-util/tree/master"),
+    )),
+
+    pomExtra := (
+      <developers>
+        <developer>
+          <name>argon-dev</name>
+          <email>argon@argon.dev</email>
+          <organization>argon-lang</organization>
+          <organizationUrl>https://argon.dev</organizationUrl>
+        </developer>
+      </developers>
+      ),
+
+    publishTo := Some(MavenCache("target-repo", (Compile / target).value / "repo")),
 
 
     scalacOptions ++= Seq(
@@ -52,6 +79,5 @@ lazy val root = crossProject(JVMPlatform, JSPlatform).in(file("."))
       "dev.zio" %%% "zio-test-sbt" % zioVersion % "test",
     ),
 
-    name := "argon-async-util",
   )
 
