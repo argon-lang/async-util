@@ -2,7 +2,17 @@ import org.scalajs.jsenv.nodejs.NodeJSEnv
 import org.scalajs.linker.interface.ESVersion
 
 
-val zioVersion = "2.0.21"
+val zioVersion = "2.1.9"
+
+publish / skip := true
+
+ThisBuild / versionScheme := Some("semver-spec")
+ThisBuild / credentials += Credentials(
+  "GnuPG Key ID",
+  "gpg",
+  "3460F237EA4AEB29F91F0638133C9C282D54701F",
+  "ignored",
+)
 
 lazy val root = crossProject(JVMPlatform, JSPlatform).in(file("."))
   .jsSettings(
@@ -18,11 +28,11 @@ lazy val root = crossProject(JVMPlatform, JSPlatform).in(file("."))
     },
   )
   .settings(
-    scalaVersion := "3.4.2",
+    scalaVersion := "3.5.0",
 
     name := "Argon Async Util",
     organization := "dev.argon",
-    version := "0.1.0-SNAPSHOT",
+    version := "0.1.0",
 
     description := "Utilities for converting between different async models",
     homepage := Some(url("https://github.com/argon-lang/async-util")),
