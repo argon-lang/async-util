@@ -1,25 +1,26 @@
 package dev.argon.util
 
-import dev.argon.util.async.ZStreamFromOutputStreamWriterZIO
+import dev.argon.util.async.ZStreamFromWriterCallbackZIO
 import zio.*
+import zio.stream.*
 import zio.test.*
 import zio.test.Assertion.*
 
-object ZStreamFromOutputStreamWriterZIOTests extends ZIOSpecDefault {
+object ZStreamFromWriterCallbackZIOTests extends ZIOSpecDefault {
 
   override def spec: Spec[Environment & Scope, Any] =
-    suite("ZStreamFromOutputStreamWriter")(
-      test("Transfer bytes")(
-        assertZIO(ZStreamFromOutputStreamWriterZIO { os =>
+    suite("ZStreamFromWriterCallback")(
+      test("Transfer strings")(
+        assertZIO(ZStreamFromWriterCallbackZIO { w =>
           ZIO.succeed {
-            os.write(1)
-            os.write(2)
-            os.write(Array[Byte](3))
+            w.write("A")
+            w.write("B")
+            w.write("CD")
           }
-        }.runCollect)(equalTo(Chunk[Byte](1, 2, 3)))
+        }.run(ZSink.mkString))(equalTo("ABCD"))
       ),
       test("Error")(
-        assertZIO(ZStreamFromOutputStreamWriterZIO { _ =>
+        assertZIO(ZStreamFromWriterCallbackZIO { _ =>
           ZIO.attempt {
             throw new RuntimeException("stop")
           }
@@ -30,9 +31,9 @@ object ZStreamFromOutputStreamWriterZIOTests extends ZIOSpecDefault {
           for
             startQueue <- Queue.unbounded[Unit]
             gotInterrupt <- Ref.make(false)
-            task <- ZStreamFromOutputStreamWriterZIO { os =>
+            task <- ZStreamFromWriterCallbackZIO { w =>
               startQueue.offer((())) *>
-              ZIO.succeed { os.write(1) }
+              ZIO.succeed { w.write("A") }
                 .forever
                 .onExit {
                   case Exit.Failure(cause) if cause.isInterruptedOnly =>

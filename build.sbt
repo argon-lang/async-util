@@ -28,11 +28,13 @@ lazy val root = crossProject(JVMPlatform, JSPlatform).in(file("."))
     },
   )
   .settings(
-    scalaVersion := "3.5.0",
+    scalaVersion := "3.5.1",
 
     name := "Argon Async Util",
     organization := "dev.argon",
-    version := "0.1.0",
+    version := "1.0.0",
+
+    Compile / packageBin / packageOptions += Package.ManifestAttributes("Automatic-Module-Name" -> "dev.argon.util.async"),
 
     description := "Utilities for converting between different async models",
     homepage := Some(url("https://github.com/argon-lang/async-util")),
@@ -56,14 +58,21 @@ lazy val root = crossProject(JVMPlatform, JSPlatform).in(file("."))
           <organizationUrl>https://argon.dev</organizationUrl>
         </developer>
       </developers>
-      ),
+    ),
+
+    credentials += Credentials(
+      "GnuPG Key ID",
+      "gpg",
+      "3460F237EA4AEB29F91F0638133C9C282D54701F",
+      "ignored"
+    ),
 
     publishTo := Some(MavenCache("target-repo", (Compile / target).value / "repo")),
 
 
     scalacOptions ++= Seq(
       "-encoding", "UTF-8",
-      "-release", "22",
+      "-release", "11",
       "-source", "future",
       "-language:higherKinds",
       "-language:existentials",
