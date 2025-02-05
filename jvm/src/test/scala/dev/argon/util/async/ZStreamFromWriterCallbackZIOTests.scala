@@ -44,6 +44,7 @@ object ZStreamFromWriterCallbackZIOTests extends ZIOSpecDefault {
             }.runDrain.fork
             _ <- startQueue.take
             _ <- task.interrupt
+              _ <- live(ZIO.sleep(1.second))
             gotInterrupt <- gotInterrupt.get
           yield gotInterrupt
         )(isTrue)
