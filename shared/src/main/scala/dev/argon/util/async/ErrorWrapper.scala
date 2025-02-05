@@ -110,5 +110,11 @@ object ErrorWrapper {
 
 
 
+  private final class Context[E] {
+    private final class ContextException(cause: Cause[E]) extends WrappedErrorBase[E](cause)
+    given ErrorWrapper[E] = forWrappedError(ContextException(_))
+  }
+
+
 }
 
