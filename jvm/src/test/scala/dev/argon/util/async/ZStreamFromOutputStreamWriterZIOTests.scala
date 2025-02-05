@@ -1,4 +1,4 @@
-package dev.argon.util
+package dev.argon.util.async
 
 import dev.argon.util.async.ZStreamFromOutputStreamWriterZIO
 import zio.*

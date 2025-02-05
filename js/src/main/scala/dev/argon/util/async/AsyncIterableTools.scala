@@ -39,10 +39,10 @@ object AsyncIterableTools {
   }
 
   object IteratorYieldResult {
-    def apply[T](value: T): IteratorYieldResult[T] =
+    def apply[T](x: T): IteratorYieldResult[T] =
       new js.Object with IteratorYieldResult[T] {
         override val done: js.UndefOr[false] = false
-        override val value: T = value
+        override val value: T = x
       }
   }
 

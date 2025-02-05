@@ -4,7 +4,7 @@ import zio.*
 import scala.compiletime.uninitialized
 import java.util.concurrent.locks.ReentrantLock
 
-private[util] final class JavaExecuteIO[R, E, A](using rt: Runtime[R], errorWrapper: ErrorWrapper[E]) {
+private[util] final class JavaExecuteIO[R, A](using rt: Runtime[R]) {
   private var isComplete: Boolean = false
   private var isError: Boolean = false
   private var result: A = uninitialized
@@ -12,7 +12,7 @@ private[util] final class JavaExecuteIO[R, E, A](using rt: Runtime[R], errorWrap
   private val lock = new ReentrantLock()
   private val condition = lock.newCondition().nn
 
-  def execute(task: ZIO[R, E, A]): A =
+  def execute(task: RIO[R, A]): A =
     Unsafe.unsafely {
       val fiber = rt.unsafe.fork(task.onExit(onComplete))
 
@@ -32,7 +32,7 @@ private[util] final class JavaExecuteIO[R, E, A](using rt: Runtime[R], errorWrap
           exit match {
             case Exit.Success(a) => exitResult = Some(a)
             case Exit.Failure(cause) =>
-              throw errorWrapper.wrap(cause)
+              throw cause.squash
           }
       }
 
@@ -42,7 +42,7 @@ private[util] final class JavaExecuteIO[R, E, A](using rt: Runtime[R], errorWrap
         exitResult.getOrElse(result)
     }
 
-  private def onComplete(exit: Exit[E, A]): UIO[Unit] =
+  private def onComplete(exit: Exit[Throwable, A]): UIO[Unit] =
     ZIO.succeed {
       exit match {
         case Exit.Success(a) =>
@@ -58,28 +58,31 @@ private[util] final class JavaExecuteIO[R, E, A](using rt: Runtime[R], errorWrap
           try
             isComplete = true
             isError = true
-            error =
-              if cause.isInterruptedOnly then new InterruptedException()
-              else errorWrapper.wrap(cause)
+            error = cause.squash
+          finally {
             condition.signalAll()
-          finally lock.unlock()
+            lock.unlock()
+          }
       }
     }
 }
 
 object JavaExecuteIO {
-  def runInterruptable[R, E, A](task: ZIO[R, E, A])(using Runtime[R], ErrorWrapper[E]): A =
-    val exec = new JavaExecuteIO[R, E, A]
+  def runInterruptableRaw[R, A](task: RIO[R, A])(using Runtime[R]): A =
+    val exec = new JavaExecuteIO[R, A]
     exec.execute(task)
-  end runInterruptable
+  end runInterruptableRaw
 
+  def runJavaRaw[A](f: => A): Task[A] =
+    ZIO.attemptBlockingInterrupt { f }
+  
+  def runInterruptable[R, E, A](task: ZIO[R, E, A])(using Runtime[R], ErrorWrapper[E]): A =
+    runInterruptableRaw(ErrorWrapper.wrapEffect(task))
+  
   def runJava[E, A](f: => A)(using ew: ErrorWrapper[E]): IO[E, A] =
-    ZIO.attemptBlockingInterrupt {
-      f
-    }
-      .catchAll {
-        case ex: ew.EX => ZIO.failCause(ew.unwrap(ex))
-        case ex => ZIO.die(ex)
+    ErrorWrapper.unwrapEffect(
+      runJavaRaw {
+        f
       }
-
+    )
 }

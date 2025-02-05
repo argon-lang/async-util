@@ -1,6 +1,6 @@
 package dev.argon.util.async
 
-import zio.*
+import zio.{FiberId, *}
 import zio.stream.ZStream
 
 import scala.reflect.TypeTest
@@ -12,29 +12,38 @@ trait ErrorWrapper[E] {
 
   def wrap(error: Cause[E]): EX
   def unwrap(ex: EX): Cause[E]
+  
+  private[ErrorWrapper] final def unwrapThrowable(ex: Throwable): Cause[E] =
+    ex match {
+      case ex: InterruptedException => Cause.interrupt(FiberId.None)
+      case ex: EX => unwrap(ex)
+      case _ => Cause.die(ex)
+    }
 }
 
 object ErrorWrapper {
+  type Aux[E, WEX <: Throwable] = ErrorWrapper[E] { type EX = WEX }
+  
   def apply[E](using errorWrapper: ErrorWrapper[E]): ErrorWrapper[E] =
     errorWrapper
 
+  private def wrappedCause[E](cause: Cause[E])(using errorWrapper: ErrorWrapper[E]): Cause[errorWrapper.EX] =
+    if !cause.isFailure then
+      cause.stripFailures
+    else
+      Cause.fail(errorWrapper.wrap(cause))
+
   def wrapEffect[R, E, A](a: ZIO[R, E, A])(using errorWrapper: ErrorWrapper[E]): ZIO[R, errorWrapper.EX, A] =
-    a.mapErrorCause { cause => Cause.fail(errorWrapper.wrap(cause)) }
+    a.mapErrorCause(wrappedCause)
 
   def wrapStream[R, E, A](a: ZStream[R, E, A])(using errorWrapper: ErrorWrapper[E]): ZStream[R, errorWrapper.EX, A] =
-    a.mapErrorCause { cause => Cause.fail(errorWrapper.wrap(cause)) }
+    a.mapErrorCause(wrappedCause)
 
   def unwrapEffect[R, E, A](a: ZIO[R, Throwable, A])(using errorWrapper: ErrorWrapper[E]): ZIO[R, E, A] =
-    a.catchAll {
-      case ex: errorWrapper.EX => ZIO.failCause(errorWrapper.unwrap(ex))
-      case ex => ZIO.die(ex)
-    }
+    a.catchAll(ex => ZIO.failCause(errorWrapper.unwrapThrowable(ex)))
 
   def unwrapStream[R, E, A](a: ZStream[R, Throwable, A])(using errorWrapper: ErrorWrapper[E]): ZStream[R, E, A] =
-    a.catchAll {
-      case ex: errorWrapper.EX => ZStream.failCause(errorWrapper.unwrap(ex))
-      case ex => ZStream.die(ex)
-    }
+    a.catchAll(ex => ZStream.failCause(errorWrapper.unwrapThrowable(ex)))
 
   abstract class WrappedErrorBase[E](val cause: Cause[E]) extends Exception
 

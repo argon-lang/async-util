@@ -9,6 +9,7 @@ import scala.reflect.TypeTest
 object JavaExecuteIOTests extends ZIOSpecDefault {
 
   final case class WrappedStringCause(cause: Cause[String]) extends Exception
+  final case class DummyDefectException() extends Exception
 
   given ErrorWrapper[String] with
     type EX = WrappedStringCause
@@ -59,6 +60,9 @@ object JavaExecuteIOTests extends ZIOSpecDefault {
             } yield res
           )(equalTo(true))
         ),
+        test("Die")(
+          assertZIO(runHelper(ZIO.die(DummyDefectException())).cause.map(_.defects.map(_.getClass)))(equalTo(List(classOf[DummyDefectException])))
+        ),
       ),
 
       suite("runJava")(
@@ -73,6 +77,12 @@ object JavaExecuteIOTests extends ZIOSpecDefault {
             runHelperJava { throw InterruptedException() }
               .catchAllCause { cause => ZIO.succeed(cause.isInterruptedOnly) }
           )(equalTo(true))
+        ),
+        test("Die")(
+          assertZIO(
+            runHelperJava { throw DummyDefectException() }
+              .cause.map(_.defects.map(_.getClass))
+          )(equalTo(List(classOf[DummyDefectException])))
         ),
       ),
     )
