@@ -55,7 +55,7 @@ object AsyncIterableTools {
   end extension
 
 
-  trait AsyncIterable[+T] extends js.Any {
+  trait AsyncIterable[+T] extends js.Object {
     @JSName(SymbolGlobal.asyncIterator)
     def asyncIterator(): AsyncIterator[T]
   }
@@ -76,17 +76,17 @@ object AsyncIterableTools {
 
 
 
-  def zstreamToAsyncIterable[R, E, T](stream: ZStream[R, E, T])(using runtime: Runtime[R], errorWrapper: ErrorWrapper[E]): AsyncIterable[T] =
+  def zstreamToAsyncIterableRaw[R, T](stream: ZStream[R, Throwable, T])(using runtime: Runtime[R]): AsyncIterable[T] =
     new js.Object with AsyncIterable[T] {
       @JSName(SymbolGlobal.asyncIterator)
       override def asyncIterator(): AsyncIterator[T] =
         new js.Object with AsyncIteratorReturn[T] {
 
           private var scope: Scope.Closeable | Null = null
-          private var pull: ZIO[R, Option[E], Chunk[T]] | Null = null
+          private var pull: ZIO[R, Option[Throwable], Chunk[T]] | Null = null
           private var buffer: Chunk[T] = Chunk.empty
 
-          private def getPull: ZIO[R, E, ZIO[R, Option[E], Chunk[T]]] =
+          private def getPull: ZIO[R, Throwable, ZIO[R, Option[Throwable], Chunk[T]]] =
             (if pull eq null then None else Some(pull.nn)).fold(
               for
                 scope <- Scope.make
@@ -99,9 +99,9 @@ object AsyncIterableTools {
             )(ZIO.succeed(_))
 
           override def next(): js.Promise[IteratorResult[T, Any]] =
-            JSPromiseUtil.runEffectToPromise(nextImpl)
+            JSPromiseUtil.runEffectToPromiseRaw(nextImpl)
 
-          private def consumeFromBuffer: ZIO[R, E, Option[T]] =
+          private def consumeFromBuffer: ZIO[R, Throwable, Option[T]] =
             ZIO.succeed {
               buffer match {
                 case h +: t =>
@@ -111,7 +111,7 @@ object AsyncIterableTools {
               }
             }
 
-          private def readNextBuffer: ZIO[R, E, Boolean] =
+          private def readNextBuffer: ZIO[R, Throwable, Boolean] =
             getPull
               .flatMap(_.unsome)
               .tap { nextBuff =>
@@ -119,7 +119,7 @@ object AsyncIterableTools {
               }
               .map(_.isDefined)
 
-          private def nextImpl: ZIO[R, E, IteratorResult[T, Any]] =
+          private def nextImpl: ZIO[R, Throwable, IteratorResult[T, Any]] =
             consumeFromBuffer.flatMap {
               case Some(a) => ZIO.succeed(IteratorYieldResult(a))
               case _: None.type =>
@@ -142,6 +142,9 @@ object AsyncIterableTools {
             closeScope()
         }
     }
+
+  def zstreamToAsyncIterable[R, E, T](stream: ZStream[R, E, T])(using runtime: Runtime[R], errorWrapper: ErrorWrapper[E]): AsyncIterable[T] =
+    zstreamToAsyncIterableRaw(ErrorWrapper.wrapStream(stream))
 
   def asyncIterableToZStreamRaw[T](iterable: => AsyncIterable[T]): Stream[Throwable, T] =
     ZStream.fromPull(
