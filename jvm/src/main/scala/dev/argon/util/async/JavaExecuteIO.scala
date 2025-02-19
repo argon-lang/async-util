@@ -1,6 +1,9 @@
 package dev.argon.util.async
 
 import zio.*
+
+import java.io.{InterruptedIOException, UncheckedIOException}
+import java.nio.channels.{ClosedByInterruptException, InterruptedByTimeoutException}
 import scala.compiletime.uninitialized
 import java.util.concurrent.locks.ReentrantLock
 
@@ -74,7 +77,20 @@ object JavaExecuteIO {
   end runInterruptableRaw
 
   def runJavaRaw[A](f: => A): Task[A] =
-    ZIO.attemptBlockingInterrupt { f }
+    ZIO.attemptBlockingInterrupt {
+      try {
+        try f
+        catch {
+          case ex: UncheckedIOException => throw ex.getCause
+        }
+      }
+      catch {
+        case ex: (InterruptedIOException | ClosedByInterruptException | InterruptedByTimeoutException) =>
+          val ex2 = new InterruptedException(ex.getMessage)
+          ex2.setStackTrace(ex.getStackTrace)
+          throw ex2
+      }
+    }
   
   def runInterruptable[R, E, A](task: ZIO[R, E, A])(using Runtime[R], ErrorWrapper[E]): A =
     runInterruptableRaw(ErrorWrapper.wrapEffect(task))
