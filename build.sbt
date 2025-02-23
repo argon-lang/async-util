@@ -28,11 +28,11 @@ lazy val root = crossProject(JVMPlatform, JSPlatform).in(file("."))
     },
   )
   .settings(
-    scalaVersion := "3.5.1",
+    scalaVersion := "3.6.3",
 
     name := "Argon Async Util",
     organization := "dev.argon",
-    version := "1.5.0",
+    version := "2.0.0-SNAPSHOT",
 
     Compile / packageBin / packageOptions += Package.ManifestAttributes("Automatic-Module-Name" -> "dev.argon.util.async"),
 

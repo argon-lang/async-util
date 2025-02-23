@@ -3,12 +3,13 @@ package dev.argon.util.async
 import zio.{FiberId, *}
 import zio.stream.ZStream
 
+import scala.compiletime.deferred
 import scala.reflect.TypeTest
 
 trait ErrorWrapper[E] {
   type EX <: Throwable
 
-  given exceptionTypeTest: TypeTest[Throwable, EX]
+  given exceptionTypeTest: TypeTest[Any, EX] = deferred
 
   def wrap(error: Cause[E]): EX
   def unwrap(ex: EX): Cause[E]
@@ -47,12 +48,12 @@ object ErrorWrapper {
 
   abstract class WrappedErrorBase[E](val cause: Cause[E]) extends Exception
 
-  def forWrappedError[E, EXImpl <: WrappedErrorBase[E]](create: Cause[E] => EXImpl)(using TypeTest[Throwable, EXImpl]): ErrorWrapper[E] =
+  def forWrappedError[E, EXImpl <: WrappedErrorBase[E]](create: Cause[E] => EXImpl)(using TypeTest[Any, EXImpl]): ErrorWrapper[E] =
     new ErrorWrapper[E] {
       override type EX = EXImpl | InterruptedException
-      override def exceptionTypeTest: TypeTest[Throwable, EX] = new TypeTest[Throwable, EX] {
-        override def unapply(x: Throwable): Option[x.type & EX] =
-          x match {
+      override lazy val exceptionTypeTest: TypeTest[Any, EX] = new TypeTest[Any, EX] {
+        override def unapply(x: Any): Option[x.type & EX] =
+          x.asInstanceOf[x.type & Matchable] match {
             case ex: EXImpl => Some(ex.asInstanceOf[x.type & EXImpl])
             case ex: (x.type & InterruptedException) => Some(ex)
             case _ => None
@@ -68,38 +69,6 @@ object ErrorWrapper {
       override def unwrap(ex: EX): Cause[E] =
         ex match {
           case _: InterruptedException => Cause.interrupt(FiberId.None)
-          case ex: EXImpl => ex.cause
-        }
-    }
-
-  def forWrappedErrorPassthrough[E, JEX <: E & Throwable, EXImpl <: WrappedErrorBase[E]](create: Cause[E] => EXImpl)(using TypeTest[Throwable, EXImpl], TypeTest[E, JEX], TypeTest[Throwable, JEX]): ErrorWrapper[E] =
-    new ErrorWrapper[E] {
-      override type EX = EXImpl | InterruptedException | JEX
-      override def exceptionTypeTest: TypeTest[Throwable, EX] = new TypeTest[Throwable, EX] {
-        override def unapply(x: Throwable): Option[x.type & EX] =
-          x match {
-            case ex: EXImpl => Some(ex.asInstanceOf[x.type & EXImpl])
-            case ex: (x.type & InterruptedException) => Some(ex)
-            case ex: JEX => Some(ex.asInstanceOf[x.type & JEX])
-            case _ => None
-          }
-      }
-
-      override def wrap(error: Cause[E]): EX =
-        if error.isInterruptedOnly then
-          new InterruptedException()
-        else if error.isFailure && error.stripFailures.isEmpty then
-          error.failures match {
-            case List(e: JEX) => e
-            case _ => create(error)
-          }
-        else
-          create(error)
-
-      override def unwrap(ex: EX): Cause[E] =
-        ex match {
-          case _: InterruptedException => Cause.interrupt(FiberId.None)
-          case ex: JEX => Cause.fail(ex)
           case ex: EXImpl => ex.cause
         }
     }
@@ -111,8 +80,8 @@ object ErrorWrapper {
 
 
   final class Context[E] {
-    final class ContextException(cause: Cause[E]) extends WrappedErrorBase[E](cause)
-    given ErrorWrapper[E] = forWrappedError(ContextException(_))
+    private final class ContextException(cause: Cause[E]) extends WrappedErrorBase[E](cause)
+    given errorWrapper: ErrorWrapper[E] = forWrappedError(ContextException(_))
   }
 
 
