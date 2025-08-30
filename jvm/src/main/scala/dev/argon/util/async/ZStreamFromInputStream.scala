@@ -3,7 +3,7 @@ package dev.argon.util.async
 import zio.*
 import zio.stream.*
 
-import java.io.{IOException, InputStream}
+import java.io.{IOException, InputStream, InterruptedIOException}
 
 object ZStreamFromInputStream {
   
@@ -13,18 +13,22 @@ object ZStreamFromInputStream {
         ZStream.repeatZIOChunkOption(
           for
             arr <- ZIO.succeed(new Array[Byte](ZStream.DefaultChunkSize))
-            bytesRead <- JavaExecuteIO.runJavaRaw { is.read(arr) }
+            bytesRead <- JavaExecuteIO.runJavaRaw {
+              try is.read(arr)
+              catch {
+                case ex: InterruptedIOException =>
+                  val ex2 = new InterruptedIOException(ex.getMessage)
+                  ex2.setStackTrace(ex.getStackTrace)
+                  throw ex2
+              }
+            }
               .refineToOrDie[IOException]
               .asSomeError
             chunk <-
               if bytesRead < 0 then
                 ZIO.fail(None)
-              else if bytesRead == 0 then
-                ZIO.succeed(Chunk.empty)
-              else if bytesRead < arr.length then
-                ZIO.succeed(Chunk.fromArray(arr).take(bytesRead))
               else
-                ZIO.succeed(Chunk.fromArray(arr))
+                ZIO.succeed(Chunk.fromArray(arr).take(bytesRead))
           yield chunk
         )
       }

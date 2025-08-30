@@ -13,33 +13,53 @@ object ZStreamFromOutputStreamWriterZIO {
   def apply[R, E](write: OutputStream => ZIO[R, E, Unit]): ZStream[R, E, Byte] =
     ZStream.unwrapScoped(
       for
-        queue <- Queue.bounded[Chunk[Byte]](2).withFinalizer { queue => queue.shutdown }
+        queue <- Queue.unbounded[Exit[Option[E], Chunk[Byte]]]
         rt <- ZIO.runtime[Any]
-        os <- ZIO.succeed { BufferedOutputStream(EnqueueOutputStream(queue, rt)) }
-        task <- write(os).onExit { _ => ZIO.succeed(os.close()) *> queue.offer(Chunk.empty) }.fork
-      yield ZStream.fromQueue(queue).takeWhile(_.nonEmpty).flattenChunks ++
-        ZStream.fromZIO(task.join).drain
+        os <- ZIO.succeed { EnqueueOutputStream(queue, rt) }
+        task <- write(os)
+          .onExit {
+            case Exit.Success(_) =>
+              queue.offer(Exit.fail(None))
+            case Exit.Failure(cause) =>
+              queue.offer(Exit.failCause(cause.map(Some.apply)))
+          }
+          .fork
+      yield ZStream.fromQueueWithShutdown(queue).flattenExitOption.flattenChunks
     )
 
-  private class EnqueueOutputStream(queue: Enqueue[Chunk[Byte]], rt: Runtime[Any]) extends OutputStream {
+  private class EnqueueOutputStream(queue: Enqueue[Exit[Nothing, Chunk[Byte]]], rt: Runtime[Any]) extends OutputStream {
     override def write(b: Int): Unit =
-      Unsafe.unsafely {
-        rt.unsafe.run(queue.offer(Chunk(b.toByte)))
+      try {
+        Unsafe.unsafely {
+          rt.unsafe.run(queue.offer(Exit.Success(Chunk(b.toByte)))).getOrThrow()
+        }
+      }
+      catch {
+        case ex: Throwable =>
+          println("read1")
+          ex.printStackTrace()
+          throw ex
       }
 
     override def write(b: Array[Byte], off: Int, len: Int): Unit =
-      Objects.checkFromIndexSize(off, len, b.length)
+      try {
+        Objects.checkFromIndexSize(off, len, b.length)
 
-      if len > 0 then
-        val buff = new Array[Byte](len)
-        java.lang.System.arraycopy(b, off, buff, 0, len)
-        Unsafe.unsafely {
-          rt.unsafe.run(queue.offer(Chunk.fromArray(buff)))
-        }
-      end if
+        if len > 0 then
+          val buff = new Array[Byte](len)
+          java.lang.System.arraycopy(b, off, buff, 0, len)
+          Unsafe.unsafely {
+            rt.unsafe.run(queue.offer(Exit.Success(Chunk.fromArray(buff)))).getOrThrow()
+          }
+        end if
+      }
+      catch {
+        case ex: Throwable =>
+          println("read2")
+          ex.printStackTrace()
+          throw ex
+      }
     end write
-
-    override def close(): Unit = super.close()
   }
 
 }

@@ -2,7 +2,7 @@ import org.scalajs.jsenv.nodejs.NodeJSEnv
 import org.scalajs.linker.interface.ESVersion
 
 
-val zioVersion = "2.1.9"
+val zioVersion = "2.1.20"
 
 publish / skip := true
 
@@ -28,11 +28,11 @@ lazy val root = crossProject(JVMPlatform, JSPlatform).in(file("."))
     },
   )
   .settings(
-    scalaVersion := "3.6.3",
+    scalaVersion := "3.7.1",
 
     name := "Argon Async Util",
     organization := "dev.argon",
-    version := "2.0.0",
+    version := "2.1.0",
 
     Compile / packageBin / packageOptions += Package.ManifestAttributes("Automatic-Module-Name" -> "dev.argon.util.async"),
 
