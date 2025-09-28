@@ -10,10 +10,12 @@ object JSPromiseUtilTests extends ZIOSpecDefault {
 
   final case class WrappedStringCause(cause: Cause[String]) extends Exception
   final case class DummyDefectException() extends Exception
+  
+  private val wrappedStringCauseTypeTest = summon[TypeTest[Any, WrappedStringCause]]
 
-  given ErrorWrapper[String] with
+  given ErrorWrapper[String]:
     type EX = WrappedStringCause
-    override def exceptionTypeTest: TypeTest[Throwable, WrappedStringCause] = summon
+    override def exceptionTypeTest: TypeTest[Any, WrappedStringCause] = wrappedStringCauseTypeTest
 
     override def wrap(cause: Cause[String]): WrappedStringCause = WrappedStringCause(cause)
     override def unwrap(ex: WrappedStringCause): Cause[String] = ex.cause

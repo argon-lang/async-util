@@ -20,4 +20,6 @@ lib/
 
 vm/js/**/lib/
 
+*.zip
+
 *.argonvm

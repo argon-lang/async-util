@@ -17,7 +17,7 @@ object ZStreamFromInputStream {
               try is.read(arr)
               catch {
                 case ex: InterruptedIOException =>
-                  val ex2 = new InterruptedIOException(ex.getMessage)
+                  val ex2 = new InterruptedException(ex.getMessage)
                   ex2.setStackTrace(ex.getStackTrace)
                   throw ex2
               }

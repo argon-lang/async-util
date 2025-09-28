@@ -9,7 +9,8 @@ import scala.reflect.TypeTest
 trait ErrorWrapper[E] {
   type EX <: Throwable
 
-  given exceptionTypeTest: TypeTest[Any, EX] = deferred
+  def exceptionTypeTest: TypeTest[Any, EX]
+  given TypeTest[Any, EX] = exceptionTypeTest
 
   def wrap(error: Cause[E]): EX
   def unwrap(ex: EX): Cause[E]
